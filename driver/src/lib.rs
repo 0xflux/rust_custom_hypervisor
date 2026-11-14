@@ -21,12 +21,17 @@ use wdk_sys::{
     DEVICE_OBJECT, DO_BUFFERED_IO, DO_DEVICE_INITIALIZING, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN,
     FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IO_TYPE_DEVICE, IRP, IRP_MJ_CLOSE, IRP_MJ_CREATE,
     IRP_MJ_DEVICE_CONTROL, IRP_MJ_READ, IRP_MJ_WRITE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT,
-    PIRP, PUNICODE_STRING, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
+    PIRP, PUNICODE_STRING, STATUS_NOT_SUPPORTED, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
+    UNICODE_STRING,
     ntddk::{
         IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink,
         IofCompleteRequest, RtlInitUnicodeString,
     },
 };
+
+use crate::vmx::{enable_vmx_operation, print_cpu_id, vmx_support};
+
+mod vmx;
 
 #[unsafe(export_name = "DriverEntry")]
 pub unsafe extern "system" fn driver_entry(
@@ -41,6 +46,14 @@ pub unsafe extern "system" fn driver_entry(
     }
 
     println!("[+] Hypervisor driver started correctly.");
+
+    print_cpu_id();
+    if vmx_support() != 1 {
+        println!("[-] VMX not supported");
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    enable_vmx_operation();
 
     STATUS_SUCCESS
 }
