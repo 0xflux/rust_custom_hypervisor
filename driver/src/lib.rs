@@ -8,8 +8,11 @@ extern crate wdk_panic;
 use core::{iter::once, ptr::null_mut};
 
 use alloc::vec::Vec;
-use shared::{DOS_DEVICE_NAME, NT_DEVICE_NAME};
-use wdk::{nt_success, println};
+use shared::{
+    DOS_DEVICE_NAME, IOCTL_SIOCTL_METHOD_BUFFERED, IOCTL_SIOCTL_METHOD_IN_DIRECT,
+    IOCTL_SIOCTL_METHOD_NEITHER, IOCTL_SIOCTL_METHOD_OUT_DIRECT, NT_DEVICE_NAME,
+};
+use wdk::{nt_success, paged_code, println};
 #[cfg(not(test))]
 use wdk_alloc::WdkAllocator;
 
@@ -21,7 +24,8 @@ use wdk_sys::{
     DEVICE_OBJECT, DO_BUFFERED_IO, DO_DEVICE_INITIALIZING, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN,
     FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IO_TYPE_DEVICE, IRP, IRP_MJ_CLOSE, IRP_MJ_CREATE,
     IRP_MJ_DEVICE_CONTROL, IRP_MJ_READ, IRP_MJ_WRITE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT,
-    PIRP, PUNICODE_STRING, STATUS_NOT_SUPPORTED, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
+    PIO_STACK_LOCATION, PIRP, PUNICODE_STRING, STATUS_INVALID_DEVICE_REQUEST,
+    STATUS_INVALID_PARAMETER, STATUS_NOT_SUPPORTED, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
     UNICODE_STRING,
     ntddk::{
         IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink,
@@ -29,9 +33,10 @@ use wdk_sys::{
     },
 };
 
-use crate::vmx::{enable_vmx_operation, print_cpu_id, vmx_support};
+use crate::processor::{enable_vmx_operation, is_vmx_supported, print_cpu_id};
 
-mod vmx;
+mod memory;
+mod processor;
 
 #[unsafe(export_name = "DriverEntry")]
 pub unsafe extern "system" fn driver_entry(
@@ -48,7 +53,7 @@ pub unsafe extern "system" fn driver_entry(
     println!("[+] Hypervisor driver started correctly.");
 
     print_cpu_id();
-    if vmx_support() != 1 {
+    if is_vmx_supported() != 1 {
         println!("[-] VMX not supported");
         return STATUS_NOT_SUPPORTED;
     }
@@ -109,16 +114,64 @@ fn init_wdk_driver(driver: &mut DRIVER_OBJECT, _registry_path: PUNICODE_STRING) 
     STATUS_SUCCESS
 }
 
-unsafe extern "C" fn ioctl_handler(_device: *mut DEVICE_OBJECT, irp: *mut IRP) -> NTSTATUS {
-    println!("[i] IOCTL handler not implemented");
-
+pub unsafe fn IoGetCurrentIrpStackLocation(irp: PIRP) -> PIO_STACK_LOCATION {
     unsafe {
-        (*irp).IoStatus.__bindgen_anon_1.Status = STATUS_SUCCESS;
+        assert!((*irp).CurrentLocation <= (*irp).StackCount + 1); // todo maybe do error handling instead of an assert?
+        (*irp)
+            .Tail
+            .Overlay
+            .__bindgen_anon_2
+            .__bindgen_anon_1
+            .CurrentStackLocation
+    }
+}
+
+unsafe extern "C" fn ioctl_handler(_device: *mut DEVICE_OBJECT, irp: *mut IRP) -> NTSTATUS {
+    unsafe {
+        paged_code!();
+
+        let mut status = STATUS_SUCCESS;
+
+        let irp_stack = IoGetCurrentIrpStackLocation(irp);
+        if irp_stack.is_null() {
+            println!("[!] IRP stack ptr was null");
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        let in_buf_len = (*irp_stack).Parameters.DeviceIoControl.InputBufferLength;
+        let out_buf_len = (*irp_stack).Parameters.DeviceIoControl.OutputBufferLength;
+
+        let data = "String from driver!";
+
+        if in_buf_len == 0 || out_buf_len < data.len() as _ {
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        match (*irp_stack).Parameters.DeviceIoControl.IoControlCode {
+            IOCTL_SIOCTL_METHOD_BUFFERED => {
+                println!("Called IOCTL_SIOCTL_METHOD_BUFFERED");
+            }
+            IOCTL_SIOCTL_METHOD_NEITHER => {
+                println!("Called IOCTL_SIOCTL_METHOD_NEITHER");
+            }
+            IOCTL_SIOCTL_METHOD_IN_DIRECT => {
+                println!("Called IOCTL_SIOCTL_METHOD_IN_DIRECT");
+            }
+            IOCTL_SIOCTL_METHOD_OUT_DIRECT => {
+                println!("Called IOCTL_SIOCTL_METHOD_OUT_DIRECT");
+            }
+            _ => {
+                println!("[-] IOCTL method not handled.");
+                status = STATUS_INVALID_DEVICE_REQUEST;
+            }
+        }
+
+        (*irp).IoStatus.__bindgen_anon_1.Status = status;
         (*irp).IoStatus.Information = 0;
         IofCompleteRequest(irp, IO_NO_INCREMENT as _);
-    }
 
-    STATUS_SUCCESS
+        status
+    }
 }
 
 unsafe extern "C" fn irp_read(_device: *mut DEVICE_OBJECT, irp: *mut IRP) -> NTSTATUS {
