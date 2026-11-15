@@ -290,6 +290,27 @@ impl EptTables {
             (*ept_ptrs.p_eptp).set_pml4_address(pml4);
         }
 
+        println!("[///////////////////////////////////////////////////////////");
+        // im curious about the bitfields macro lets see
+        unsafe {
+            println!(
+                "(*ept_ptrs.p_eptp) dirty: {}",
+                (*ept_ptrs.p_eptp).dirty_and_access_enabled()
+            );
+            println!(
+                "(*ept_ptrs.p_eptp) mem type: {}",
+                (*ept_ptrs.p_eptp).memory_type()
+            );
+            println!(
+                "(*ept_ptrs.p_eptp) page walk len: {}",
+                (*ept_ptrs.p_eptp).page_walk_length()
+            );
+            println!(
+                "(*ept_ptrs.p_eptp) whole thing?: {:b}",
+                (*ept_ptrs.p_eptp).0
+            );
+        }
+
         //
         // Finally, update the globals - ownership is transferred, everything is gucci
         //
