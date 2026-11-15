@@ -23,8 +23,8 @@ pub struct Globals {
 impl Globals {
     /// For each dynamically allocated bit of data, ensure we free it
     pub fn free_all(&self) {
-        // 
-        // Free each VirtualMachineState allocation, if it was not already de-allocated by the 
+        //
+        // Free each VirtualMachineState allocation, if it was not already de-allocated by the
         // stop VMX operation. Keep for redundancy
         //
         {

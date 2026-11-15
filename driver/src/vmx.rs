@@ -102,13 +102,13 @@ pub fn stop_vmx() {
             asm!("vmxoff");
         };
     }
-    
+
     {
         let ptr = GLOBALS.guest_state.load(SeqCst);
-            if !ptr.is_null() {
-                drop(unsafe { Box::from_raw(ptr) });
-                GLOBALS.guest_state.store(null_mut(), SeqCst);
-            }
+        if !ptr.is_null() {
+            drop(unsafe { Box::from_raw(ptr) });
+            GLOBALS.guest_state.store(null_mut(), SeqCst);
+        }
     }
 
     GLOBALS.vmx_enabled.store(false, SeqCst);

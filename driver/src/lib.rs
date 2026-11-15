@@ -36,7 +36,10 @@ use wdk_sys::{
     },
 };
 
-use crate::{globals::GLOBALS, vmx::{start_vmx, stop_vmx}};
+use crate::{
+    globals::GLOBALS,
+    vmx::{start_vmx, stop_vmx},
+};
 
 mod globals;
 mod memory;
