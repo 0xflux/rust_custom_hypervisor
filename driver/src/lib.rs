@@ -5,11 +5,7 @@ extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-use core::{
-    iter::once,
-    ptr::null_mut,
-    sync::atomic::{AtomicPtr, Ordering::SeqCst},
-};
+use core::{iter::once, ptr::null_mut};
 
 use alloc::vec::Vec;
 use shared::{
@@ -37,6 +33,7 @@ use wdk_sys::{
 };
 
 use crate::{
+    ept::EptTables,
     globals::GLOBALS,
     vmx::{start_vmx, stop_vmx},
 };
@@ -47,6 +44,8 @@ mod memory;
 mod processor;
 mod vmx;
 
+pub const POOL_TAG: u32 = u32::from_le_bytes(*b"rsvh");
+
 #[unsafe(export_name = "DriverEntry")]
 pub unsafe extern "system" fn driver_entry(
     driver: &mut DRIVER_OBJECT,
@@ -54,7 +53,7 @@ pub unsafe extern "system" fn driver_entry(
 ) -> NTSTATUS {
     println!("[i] Starting Hypervisor POC.");
 
-    let status = init_wdk_driver(driver, registry_path as *mut _);
+    let mut status = init_wdk_driver(driver, registry_path as *mut _);
     if !nt_success(status) {
         driver_exit(driver);
         return status;
@@ -62,7 +61,15 @@ pub unsafe extern "system" fn driver_entry(
 
     println!("[+] Driver initialised correctly.");
 
-    let status = start_vmx();
+    println!("[i] About to initialise EPT");
+    status = EptTables::new();
+    if !nt_success(status) {
+        println!("[-] Failed to initialise EPT, failed with status: {status:#X}");
+        driver_exit(driver);
+        return status;
+    }
+
+    status = start_vmx();
     if !nt_success(status) {
         println!("[-] Failed to start VMX");
         driver_exit(driver);
@@ -73,7 +80,7 @@ pub unsafe extern "system" fn driver_entry(
     println!("========================================================");
     println!("[+] VMX operation started successfully.");
 
-    STATUS_SUCCESS
+    status
 }
 
 fn init_wdk_driver(driver: &mut DRIVER_OBJECT, _registry_path: PUNICODE_STRING) -> NTSTATUS {
