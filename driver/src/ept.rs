@@ -4,8 +4,8 @@ use alloc::boxed::Box;
 use bitfield::bitfield;
 use wdk::{paged_code, println};
 use wdk_sys::{
-    _POOL_TYPE::NonPagedPool,
-    NTSTATUS, PAGE_SIZE, STATUS_INSUFFICIENT_RESOURCES, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
+    NTSTATUS, PAGE_SIZE, POOL_FLAG_NON_PAGED, STATUS_INSUFFICIENT_RESOURCES, STATUS_SUCCESS,
+    STATUS_UNSUCCESSFUL,
     ntddk::{ExAllocatePool2, ExFreePoolWithTag},
 };
 
@@ -155,43 +155,42 @@ impl EptTables {
         let mut ept_ptrs = EptTables::default();
 
         // 1 ------------
-        let p_eptp = unsafe { ExAllocatePool2(NonPagedPool as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_eptp = unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
         if p_eptp.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
-        unsafe { core::ptr::write_bytes(p_eptp as *mut u8, 0, PAGE_SIZE as _) };
         ept_ptrs.p_eptp = p_eptp as _;
 
         // 2 --------------
-        let p_ept_pml_4 = unsafe { ExAllocatePool2(NonPagedPool as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_ept_pml_4 =
+            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
         if p_ept_pml_4.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
-        unsafe { core::ptr::write_bytes(p_ept_pml_4 as *mut u8, 0, PAGE_SIZE as _) };
         ept_ptrs.p_ept_pml_4 = p_ept_pml_4 as _;
 
         // 3 ----------------
-        let p_ept_pdpt = unsafe { ExAllocatePool2(NonPagedPool as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_ept_pdpt =
+            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
         if p_ept_pdpt.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
-        unsafe { core::ptr::write_bytes(p_ept_pdpt as *mut u8, 0, PAGE_SIZE as _) };
         ept_ptrs.p_ept_pdpt = p_ept_pdpt as _;
 
         // 4 -----------------
-        let p_ept_pd = unsafe { ExAllocatePool2(NonPagedPool as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_ept_pd =
+            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
         if p_ept_pd.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
-        unsafe { core::ptr::write_bytes(p_ept_pd as *mut u8, 0, PAGE_SIZE as _) };
         ept_ptrs.p_ept_pd = p_ept_pd as _;
 
         // 5 -----------------
-        let p_ept_pt = unsafe { ExAllocatePool2(NonPagedPool as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_ept_pt =
+            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
         if p_ept_pt.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
-        unsafe { core::ptr::write_bytes(p_ept_pt as *mut u8, 0, PAGE_SIZE as _) };
         ept_ptrs.p_ept_pt = p_ept_pt as _;
 
         println!("[+] Allocated pages for EPT");
@@ -203,11 +202,10 @@ impl EptTables {
         let num_pages = 10;
         let guest_sz_bytes: u64 = (num_pages * PAGE_SIZE) as _;
         let p_guest_memory =
-            unsafe { ExAllocatePool2(NonPagedPool as _, guest_sz_bytes, POOL_TAG) };
+            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, guest_sz_bytes, POOL_TAG) };
         if p_guest_memory.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
-        unsafe { core::ptr::write_bytes(p_guest_memory as *mut u8, 0, guest_sz_bytes as _) };
         ept_ptrs.p_guest_memory = p_guest_memory;
         println!("[+] Guest memory allocated");
 
