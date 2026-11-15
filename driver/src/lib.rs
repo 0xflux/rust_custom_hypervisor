@@ -5,7 +5,11 @@ extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-use core::{iter::once, ptr::null_mut};
+use core::{
+    iter::once,
+    ptr::null_mut,
+    sync::atomic::{AtomicPtr, Ordering::SeqCst},
+};
 
 use alloc::vec::Vec;
 use shared::{
@@ -33,10 +37,17 @@ use wdk_sys::{
     },
 };
 
-use crate::processor::{enable_vmx_operation, is_vmx_supported, print_cpu_id};
+use crate::{
+    globals::GLOABLS,
+    memory::{VirtualMachineState, allocate_vmx_region},
+    processor::{enable_vmx_operation, is_vmx_supported, print_cpu_id},
+    vmx::start_vmx,
+};
 
+mod globals;
 mod memory;
 mod processor;
+mod vmx;
 
 #[unsafe(export_name = "DriverEntry")]
 pub unsafe extern "system" fn driver_entry(
@@ -50,15 +61,13 @@ pub unsafe extern "system" fn driver_entry(
         return status;
     }
 
-    println!("[+] Hypervisor driver started correctly.");
+    println!("[+] Driver initialised correctly.");
 
-    print_cpu_id();
-    if is_vmx_supported() != 1 {
-        println!("[-] VMX not supported");
-        return STATUS_NOT_SUPPORTED;
+    let status = start_vmx();
+    if !nt_success(status) {
+        println!("[-] Failed to start VMX");
+        return status;
     }
-
-    enable_vmx_operation();
 
     STATUS_SUCCESS
 }
@@ -219,6 +228,8 @@ extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
     unsafe {
         IoDeleteDevice((*driver).DeviceObject);
     }
+
+    GLOABLS.free_all();
 
     println!("[i] HyperVisor driver unloaded.")
 }

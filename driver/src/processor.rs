@@ -1,4 +1,7 @@
-use core::arch::asm;
+use core::{
+    arch::asm,
+    ffi::{c_uchar, c_ulonglong, c_void},
+};
 
 use wdk::println;
 use wdk_sys::{
@@ -6,22 +9,95 @@ use wdk_sys::{
     ntddk::{KeQueryActiveProcessors, KeSetSystemAffinityThread},
 };
 
-const MSR_IA32_FEATURE_CONTROL: i32 = 0x03A;
+pub const MSR_IA32_FEATURE_CONTROL: i32 = 0x03A;
+pub const MSR_IA32_VMX_BASIC: i32 = 0x480;
 
-pub fn run_on_each_logical_processor() {
-    unsafe {
-        let max = KeQueryActiveProcessors();
+pub struct Ia32VmxBasicMsr {
+    pub revision_identifier: u32,
+    // 12 bits
+    pub region_size: u16,
+    // represented 1 bit
+    pub region_clear: u8,
+    // represented 1 bit
+    pub supported_ia_64: u8,
+    // represented 1 bit
+    pub supported_dual_monitor: u8,
+    // represented 4 bits
+    pub memory_type: u8,
+    // represented 1 bit
+    pub vm_exit_report: u8,
+    // represented 1 bit
+    pub vmx_capability_hint: u8,
+}
 
-        for i in 0..max {
-            let affinity_mask = 2 ^ i;
-            KeSetSystemAffinityThread(affinity_mask);
+impl Ia32VmxBasicMsr {
+    pub fn new(bitfields: u64) -> Self {
+        let revision_identifier: u32 = bitfields as u32;
+        let mut lower = (bitfields >> 32) as u32;
+        let region_size = (lower & 0b111111111111) as u16;
+        lower >>= 12;
+        let region_clear = (lower & 1) as u8;
+        lower >>= 0b1111;
+        let supported_ia_64 = (lower & 1) as u8;
+        let supported_dual_monitor = (lower & 0b10) as u8;
+        let memory_type = (lower & 0b111100) as u8;
+        let vm_exit_report = (lower & 0b1000000) as u8;
+        let vmx_capability_hint = (lower & 0b10000000) as u8;
 
-            println!("==================================================");
-            println!("[i] Current thread is executing in {i}th logical processor.");
-
-            // run code here
+        Self {
+            revision_identifier,
+            region_size,
+            region_clear,
+            supported_ia_64,
+            supported_dual_monitor,
+            memory_type,
+            vm_exit_report,
+            vmx_capability_hint,
         }
     }
+}
+
+///  [in] A pointer to a 64-bit, 4KB-aligned physical address that points to a VMXON region.
+///
+/// The [`__vmx_on`] function corresponds to the `VMXON` machine instruction. This function supports
+/// the interaction of a host's virtual machine monitor with a guest operating system and its applications.
+///
+/// # Returns
+/// | Value | Meaning |
+/// | ---- | ---- |
+/// | 0 | The operation succeeded. |
+/// | 1 | The operation failed with extended status available in the VM-instruction error field of the current VMCS. |
+/// | 2 | The operation failed without status available. |
+pub fn vmx_on(physical_addr: *mut *mut c_void) -> (u8, u8) {
+    let rflags: u64;
+
+    unsafe {
+        asm!(
+            "vmxon [{0}]",
+            "pushfq",
+            "pop {1}",
+            in(reg) physical_addr,
+            out(reg) rflags
+        );
+    };
+
+    (rflags as u8 & 1u8, ((rflags >> 6) & 1) as u8)
+}
+
+pub fn vmptrld(physical_address: *mut *mut c_void) -> (u8, u8) {
+    let rflags: u64;
+
+    unsafe {
+        asm!(
+            "vmptrld [{0}]",
+            "pushfq",
+            "pop {1}",
+            in(reg) physical_address,
+            out(reg) rflags
+        );
+    };
+
+    (rflags as u8 & 1u8, ((rflags >> 6) & 1) as u8)
 }
 
 pub fn enable_vmx_operation() {
@@ -33,8 +109,6 @@ pub fn enable_vmx_operation() {
             "mov cr4, rax",
         )
     }
-
-    println!("[+] VMX Operation enabled.");
 }
 
 fn wrmsr(msr: u32, value: u64) {
@@ -48,17 +122,17 @@ fn wrmsr(msr: u32, value: u64) {
     }
 }
 
-fn rdmsr(msr: u32) -> u64 {
+pub fn rdmsr(input: i32) -> u64 {
     let lo: u32;
     let hi: u32;
 
     unsafe {
         asm!("rdmsr",
-             in("rcx") msr, out("rax") lo, out("rdx") hi,
+             in("rcx") input, out("rax") lo, out("rdx") hi,
              options(nostack));
     }
 
-    let mut msr_read = ((hi as u64) << 32) | lo as u64;
+    let msr_read = ((hi as u64) << 32) | lo as u64;
 
     println!("[i] MSR read result: {msr_read:b}");
 
