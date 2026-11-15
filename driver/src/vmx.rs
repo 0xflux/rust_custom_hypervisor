@@ -9,9 +9,7 @@ use wdk_sys::{
 
 use crate::{
     globals::GLOABLS,
-    memory::{
-        VirtualMachineState, VmxAllocatedRegion, VmxRegionTypeForAllocation, allocate_vmx_region,
-    },
+    memory::{VirtualMachineState, VmxRegionTypeForAllocation, allocate_vmx_region},
     processor::{enable_vmx_operation, is_vmx_supported, print_cpu_id},
 };
 
@@ -28,11 +26,18 @@ pub fn start_vmx() -> NTSTATUS {
     let processor_count = unsafe { KeQueryActiveProcessorCount(null_mut()) };
     println!("[i] Processor count: {processor_count}");
 
+    if processor_count == 0 {
+        println!("[-] Invalid processor count, got 0.");
+        return STATUS_UNSUCCESSFUL;
+    }
+
     //
     // Each processor needs its own region, reserve memory for `processor_count` slots,
     // this can then be stored into the globals
     //
-    let mut porocessor_regions: Vec<VirtualMachineState> = Vec::with_capacity(processor_count as _);
+    let mut porocessor_regions: Vec<VirtualMachineState> =
+        Vec::with_capacity(processor_count as usize);
+    unsafe { porocessor_regions.set_len(processor_count as _) };
 
     for i in 0..processor_count {
         let affinity_mask = 2u64.pow(i);

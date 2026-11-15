@@ -29,20 +29,14 @@ use wdk_sys::{
     FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IO_TYPE_DEVICE, IRP, IRP_MJ_CLOSE, IRP_MJ_CREATE,
     IRP_MJ_DEVICE_CONTROL, IRP_MJ_READ, IRP_MJ_WRITE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT,
     PIO_STACK_LOCATION, PIRP, PUNICODE_STRING, STATUS_INVALID_DEVICE_REQUEST,
-    STATUS_INVALID_PARAMETER, STATUS_NOT_SUPPORTED, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
-    UNICODE_STRING,
+    STATUS_INVALID_PARAMETER, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
     ntddk::{
         IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink,
         IofCompleteRequest, RtlInitUnicodeString,
     },
 };
 
-use crate::{
-    globals::GLOABLS,
-    memory::{VirtualMachineState, allocate_vmx_region},
-    processor::{enable_vmx_operation, is_vmx_supported, print_cpu_id},
-    vmx::start_vmx,
-};
+use crate::{globals::GLOABLS, vmx::start_vmx};
 
 mod globals;
 mod memory;
@@ -58,6 +52,7 @@ pub unsafe extern "system" fn driver_entry(
 
     let status = init_wdk_driver(driver, registry_path as *mut _);
     if !nt_success(status) {
+        driver_exit(driver);
         return status;
     }
 
@@ -66,8 +61,13 @@ pub unsafe extern "system" fn driver_entry(
     let status = start_vmx();
     if !nt_success(status) {
         println!("[-] Failed to start VMX");
+        driver_exit(driver);
         return status;
     }
+
+    println!("");
+    println!("========================================================");
+    println!("[+] VMX operation started successfully.");
 
     STATUS_SUCCESS
 }
