@@ -281,9 +281,9 @@ impl EptTables {
         // so the page walk length is 4-1=3, and the PML4 address is the physical address of the first entry in the PML4 table.
         //
         unsafe {
-            (*ept_ptrs.p_eptp).set_dirty_and_access_enabled(true);
             (*ept_ptrs.p_eptp).set_memory_type(6);
             (*ept_ptrs.p_eptp).set_page_walk_length(3); // 4 (tables walked) - 1 = 3
+            (*ept_ptrs.p_eptp).set_dirty_and_access_enabled(true);
 
             let pml4 =
                 virtual_to_physical_address(ept_ptrs.p_ept_pml_4 as _) as u64 / PAGE_SIZE as u64;
@@ -294,16 +294,16 @@ impl EptTables {
         // im curious about the bitfields macro lets see
         unsafe {
             println!(
-                "(*ept_ptrs.p_eptp) dirty: {}",
-                (*ept_ptrs.p_eptp).dirty_and_access_enabled()
-            );
-            println!(
                 "(*ept_ptrs.p_eptp) mem type: {}",
                 (*ept_ptrs.p_eptp).memory_type()
             );
             println!(
                 "(*ept_ptrs.p_eptp) page walk len: {}",
                 (*ept_ptrs.p_eptp).page_walk_length()
+            );
+            println!(
+                "(*ept_ptrs.p_eptp) dirty: {}",
+                (*ept_ptrs.p_eptp).dirty_and_access_enabled()
             );
             println!(
                 "(*ept_ptrs.p_eptp) whole thing?: {:b}",
