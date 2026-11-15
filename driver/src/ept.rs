@@ -20,12 +20,12 @@ bitfield! {
     pub struct EptPML4E(u64);
     impl Debug;
 
-    pub read, _ : 0;
-    pub write, _ : 1;
-    pub execute, _ : 2;
-    pub accessed, _ : 8;
-    pub execute_for_user_mode, _ : 10;
-    pub physical_address, _ : 47, 12;
+    pub read, set_read : 0;
+    pub write, set_write : 1;
+    pub execute, set_execute : 2;
+    pub accessed, set_accessed : 8;
+    pub execute_for_user_mode, set_execute_for_user_mode : 10;
+    pub physical_address, set_physical_address : 47, 12;
 }
 
 bitfield! {
@@ -33,12 +33,12 @@ bitfield! {
     pub struct EptPdPte(u64);
     impl Debug;
 
-    pub read, _ : 0;
-    pub write, _ : 1;
-    pub execute, _ : 2;
-    pub accessed, _ : 8;
-    pub execute_for_user_mode, _ : 10;
-    pub physical_address, _ : 47, 12;
+    pub read, set_read : 0;
+    pub write, set_write : 1;
+    pub execute, set_execute : 2;
+    pub accessed, set_accessed : 8;
+    pub execute_for_user_mode, set_execute_for_user_mode : 10;
+    pub physical_address, set_physical_address : 47, 12;
 }
 
 bitfield! {
@@ -46,12 +46,12 @@ bitfield! {
     pub struct EptPde(u64);
     impl Debug;
 
-    pub read, _ : 0;
-    pub write, _ : 1;
-    pub execute, _ : 2;
-    pub accessed, _ : 8;
-    pub execute_for_user_mode, _ : 10;
-    pub physical_address, _ : 47, 12;
+    pub read, set_read : 0;
+    pub write, set_write : 1;
+    pub execute, set_execute : 2;
+    pub accessed, set_accessed : 8;
+    pub execute_for_user_mode, set_execute_for_user_mode : 10;
+    pub physical_address, set_physical_address : 47, 12;
 }
 
 bitfield! {
@@ -59,14 +59,14 @@ bitfield! {
     pub struct EptPte(u64);
     impl Debug;
 
-    pub read, _ : 0;
-    pub write, _ : 1;
-    pub execute, _ : 2;
-    pub eptmemory_type, _ : 5, 3;
-    pub ignore_pat, _ : 6;
-    pub accessed_flag, _ : 8;
-    pub dirty_flag, _ : 9;
-    pub execute_for_user_mode, _ : 10;
-    pub physical_address, _ : 47, 12;
-    pub suppress_ve, _ : 63;
+    pub read, set_read : 0;
+    pub write, set_write : 1;
+    pub execute, set_execute : 2;
+    pub eptmemory_type, set_eptmemory_type : 5, 3;
+    pub ignore_pat, set_ignore_pat : 6;
+    pub accessed_flag, set_accessed_flag : 8;
+    pub dirty_flag, set_dirty_flag : 9;
+    pub execute_for_user_mode, set_execute_for_user_mode : 10;
+    pub physical_address, set_physical_address : 47, 12;
+    pub suppress_ve, set_suppress_ve : 63;
 }
