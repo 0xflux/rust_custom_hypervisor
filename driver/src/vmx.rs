@@ -1,4 +1,4 @@
-use core::{ptr::null_mut, sync::atomic::Ordering::SeqCst};
+use core::{arch::asm, ptr::null_mut, sync::atomic::Ordering::SeqCst};
 
 use alloc::{boxed::Box, vec::Vec};
 use wdk::{paged_code, println};
@@ -8,7 +8,7 @@ use wdk_sys::{
 };
 
 use crate::{
-    globals::GLOABLS,
+    globals::GLOBALS,
     memory::{VirtualMachineState, VmxRegionTypeForAllocation, allocate_vmx_region},
     processor::{enable_vmx_operation, is_vmx_supported, print_cpu_id},
 };
@@ -71,10 +71,45 @@ pub fn start_vmx() -> NTSTATUS {
     // Only store the globals once we are set up correctly; raii should manage the failure state
     // on return if anything above went wrong
     //
-    GLOABLS.processor_counts.store(processor_count, SeqCst);
+    GLOBALS.processor_counts.store(processor_count, SeqCst);
 
     let p_porocessor_regions = Box::into_raw(Box::new(porocessor_regions));
-    GLOABLS.guest_state.store(p_porocessor_regions, SeqCst);
+    GLOBALS.guest_state.store(p_porocessor_regions, SeqCst);
+
+    GLOBALS.vmx_enabled.store(true, SeqCst);
 
     STATUS_SUCCESS
+}
+
+pub fn stop_vmx() {
+    println!("[i] Stopping VMX..");
+
+    if !GLOBALS.vmx_enabled.load(SeqCst) {
+        println!("[-] VMX was not enabled.");
+        return;
+    }
+
+    let processor_count = GLOBALS.processor_counts.load(SeqCst);
+
+    for i in 0..processor_count {
+        let affinity_mask = 2u64.pow(i);
+        unsafe { KeSetSystemAffinityThread(affinity_mask) };
+
+        println!("==============================================================");
+        println!("[i] Current thread is executing in {i}th logical processor.");
+
+        unsafe {
+            asm!("vmxoff");
+        };
+    }
+    
+    {
+        let ptr = GLOBALS.guest_state.load(SeqCst);
+            if !ptr.is_null() {
+                drop(unsafe { Box::from_raw(ptr) });
+                GLOBALS.guest_state.store(null_mut(), SeqCst);
+            }
+    }
+
+    GLOBALS.vmx_enabled.store(false, SeqCst);
 }

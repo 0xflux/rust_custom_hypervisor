@@ -36,7 +36,7 @@ use wdk_sys::{
     },
 };
 
-use crate::{globals::GLOABLS, vmx::start_vmx};
+use crate::{globals::GLOBALS, vmx::{start_vmx, stop_vmx}};
 
 mod globals;
 mod memory;
@@ -229,7 +229,8 @@ extern "C" fn driver_exit(driver: *mut DRIVER_OBJECT) {
         IoDeleteDevice((*driver).DeviceObject);
     }
 
-    GLOABLS.free_all();
+    stop_vmx();
+    GLOBALS.free_all();
 
-    println!("[i] HyperVisor driver unloaded.")
+    println!("[i] Hypervisor driver unloaded.")
 }
