@@ -1,17 +1,13 @@
-use core::{
-    arch::asm,
-    ffi::{c_uchar, c_ulonglong, c_void},
-};
+use core::{arch::asm, ffi::c_void};
 
 use wdk::println;
-use wdk_sys::{
-    BOOLEAN, FALSE,
-    ntddk::{KeQueryActiveProcessors, KeSetSystemAffinityThread},
-};
+use wdk_sys::{BOOLEAN, FALSE};
 
 pub const MSR_IA32_FEATURE_CONTROL: i32 = 0x03A;
 pub const MSR_IA32_VMX_BASIC: i32 = 0x480;
 
+#[derive(Debug)]
+#[allow(unused)]
 pub struct Ia32VmxBasicMsr {
     pub revision_identifier: u32,
     // 12 bits

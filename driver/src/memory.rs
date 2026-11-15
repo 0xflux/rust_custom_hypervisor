@@ -146,10 +146,7 @@ pub fn allocate_vmx_region(
         // to unpredictable behavior.
         //
         let vmx_basic_msr = Ia32VmxBasicMsr::new(rdmsr(MSR_IA32_VMX_BASIC));
-        println!(
-            "[i] MSR_IA32_VMX_BASIC (MSR {MSR_IA32_VMX_BASIC:#X}) Revision Identifier {}",
-            vmx_basic_msr.revision_identifier
-        );
+        println!("[i] MSR_IA32_VMX_BASIC: {vmx_basic_msr:?}");
 
         core::ptr::write(
             vmx_allocation_region.p_aligned_virtual_buffer as _,

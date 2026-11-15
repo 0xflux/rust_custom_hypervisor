@@ -41,6 +41,7 @@ use crate::{
     vmx::{start_vmx, stop_vmx},
 };
 
+mod ept;
 mod globals;
 mod memory;
 mod processor;
