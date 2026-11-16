@@ -5,7 +5,6 @@ use bitfield::bitfield;
 use wdk::{paged_code, println};
 use wdk_sys::{
     NTSTATUS, PAGE_SIZE, POOL_FLAG_NON_PAGED, STATUS_INSUFFICIENT_RESOURCES, STATUS_SUCCESS,
-    STATUS_UNSUCCESSFUL,
     ntddk::{ExAllocatePool2, ExFreePoolWithTag},
 };
 
@@ -219,7 +218,7 @@ impl EptTables {
 
                 // select the 4 KiB guest memory page
                 let host_virtual_page =
-                    (ept_ptrs.p_guest_memory as *mut u8).add((i as u32 * PAGE_SIZE as u32) as _);
+                    (ept_ptrs.p_guest_memory as *mut u8).add((i * PAGE_SIZE) as _);
 
                 // finmd the host-physical page
                 let host_phys_page = virtual_to_physical_address(host_virtual_page as _);

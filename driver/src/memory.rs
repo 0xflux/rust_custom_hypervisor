@@ -1,6 +1,5 @@
-use core::{ffi::c_void, ops::Deref, ptr::null_mut};
+use core::{ffi::c_void, ptr::null_mut};
 
-use alloc::boxed::Box;
 use wdk::println;
 use wdk_sys::{
     DISPATCH_LEVEL, KIRQL, NTSTATUS, PHYSICAL_ADDRESS, PVOID, SIZE_T,
@@ -37,7 +36,7 @@ impl VmxAllocatedRegion {
             }
 
             let mut this = Self {
-                p_raw_data: ptr as *mut c_void,
+                p_raw_data: ptr,
                 len: num_bytes as usize,
                 p_aligned_virtual_buffer: null_mut(),
                 p_aligned_physical_buffer: 0,
@@ -85,12 +84,8 @@ impl Drop for VmxAllocatedRegion {
     }
 }
 
-unsafe extern "system" {
-    pub fn KeRaiseIrqlToDpcLevel() -> KIRQL;
-}
-
 pub fn virtual_to_physical_address(p_va: PVOID) -> PVOID {
-    unsafe { return MmGetPhysicalAddress(p_va).QuadPart as _ }
+    unsafe { MmGetPhysicalAddress(p_va).QuadPart as _ }
 }
 
 pub fn physical_to_virtual_address(p_addr: PVOID) -> PVOID {
