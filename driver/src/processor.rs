@@ -106,8 +106,8 @@ pub fn vmx_on(physical_addr: *mut *mut c_void) -> Result<(), VmxError> {
 }
 
 /// This instruction marks the current-VMCS pointer valid and loads it with the physical address in the instruction operand.
-/// The instruction fails if its operand is not properly aligned, sets unsupported physical-address bits, or is equal to the 
-/// VMXON pointer. In addition, this instruction fails if the 32 bits in memory referenced by the operand do not match the VMCS 
+/// The instruction fails if its operand is not properly aligned, sets unsupported physical-address bits, or is equal to the
+/// VMXON pointer. In addition, this instruction fails if the 32 bits in memory referenced by the operand do not match the VMCS
 /// revision identifier supported by the processor.
 pub fn vmptrld(physical_address: *const u64) -> Result<(), VmxError> {
     let rflags: u64;
@@ -129,10 +129,9 @@ pub fn load_vmcs(guest_state: &VirtualMachineState) -> Result<(), VmxError> {
     vmptrld(&guest_state.get_physical_address_vmcs_region())
 }
 
-
 /// Store Pointer to Virtual-Machine Control Structure
-/// 
-/// Stores the current-VMCS pointer into a specified memory address. The operand of this 
+///
+/// Stores the current-VMCS pointer into a specified memory address. The operand of this
 /// instruction is always 64 bits and is always in memory.
 ///
 /// # Safety
@@ -162,8 +161,7 @@ pub fn vmptrst() -> Result<u64, VmxError> {
 ///
 /// # Safety
 /// Requires CPL 0
-pub fn clear_vmcs_state(guest_state: &VirtualMachineState) -> Result<(), VmxError>
-{
+pub fn clear_vmcs_state(guest_state: &VirtualMachineState) -> Result<(), VmxError> {
     let rflags: u64;
 
     // Clear the state of the VMCS to inactive

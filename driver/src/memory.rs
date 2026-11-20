@@ -113,6 +113,15 @@ pub struct VirtualMachineState {
     /// and `VMPTRLD`. Once loaded, its fields are accessed through `VMREAD`
     /// and `VMWRITE`.
     vmcs_region: VmxAllocatedRegion,
+    /// Extended-Page-Table Pointer
+    eptp: *const u64,
+    /// Stack for VMM in VM-Exit State
+    vmm_stack: *const u64,
+    // TODO these can be setup like the VmxAllocatedRegion
+    /// MSR Bitmap Virtual Address
+    msr_bitmap: *const u64,
+    /// MSR Bitmap Virtual Address
+    msr_bitmap_physical: *const u64,
 }
 
 impl VirtualMachineState {
