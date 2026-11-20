@@ -53,6 +53,27 @@ impl Ia32VmxBasicMsr {
     }
 }
 
+pub enum VmxError {
+    VmFailInvalid,
+    VmFailValid,
+}
+
+#[inline(always)]
+fn instruction_has_vmx_error(rflags: u64) -> Result<(), VmxError> {
+    let (cf, zf) = (rflags as u8 & 1u8, ((rflags >> 6) & 1) as u8);
+    if cf != 0 || zf != 0 {
+        println!("[-] __vmx_on failed with status: cf:{cf:#X}/zf:{zf:#X}");
+    }
+
+    if cf != 0 {
+        return Err(VmxError::VmFailInvalid)
+    } else if zf != 0 {
+        return Err(VmxError::VmFailValid);
+    }
+
+    Ok(())
+}
+
 ///  [in] A pointer to a 64-bit, 4KB-aligned physical address that points to a VMXON region.
 ///
 /// The [`__vmx_on`] function corresponds to the `VMXON` machine instruction. This function supports
@@ -64,7 +85,7 @@ impl Ia32VmxBasicMsr {
 /// | 0 | The operation succeeded. |
 /// | 1 | The operation failed with extended status available in the VM-instruction error field of the current VMCS. |
 /// | 2 | The operation failed without status available. |
-pub fn vmx_on(physical_addr: *mut *mut c_void) -> (u8, u8) {
+pub fn vmx_on(physical_addr: *mut *mut c_void) -> Result<(), VmxError> {
     let rflags: u64;
 
     unsafe {
@@ -77,10 +98,10 @@ pub fn vmx_on(physical_addr: *mut *mut c_void) -> (u8, u8) {
         );
     };
 
-    (rflags as u8 & 1u8, ((rflags >> 6) & 1) as u8)
+    instruction_has_vmx_error(rflags)
 }
 
-pub fn vmptrld(physical_address: *mut *mut c_void) -> (u8, u8) {
+pub fn vmptrld(physical_address: *mut *mut c_void) -> Result<(), VmxError> {
     let rflags: u64;
 
     unsafe {
@@ -93,7 +114,29 @@ pub fn vmptrld(physical_address: *mut *mut c_void) -> (u8, u8) {
         );
     };
 
-    (rflags as u8 & 1u8, ((rflags >> 6) & 1) as u8)
+    instruction_has_vmx_error(rflags)
+}
+
+/// Return current VMCS pointer.
+///
+/// # Safety
+/// Needs CPL 0.
+pub unsafe fn vmptrst() -> Result<u64, VmxError> {
+    let value: u64 = 0;
+    let rflags: u64;
+
+    unsafe {
+        asm!(
+            "vmptrst ({0})", 
+            "pushfq", 
+           "pop {1}",
+            in(reg) &value,
+            out(reg) rflags
+        )
+    };
+
+    instruction_has_vmx_error(rflags)?;
+    Ok(value)
 }
 
 pub fn enable_vmx_operation() {

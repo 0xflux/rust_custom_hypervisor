@@ -150,10 +150,8 @@ pub fn allocate_vmx_region(
 
         match phase {
             VmxRegionTypeForAllocation::VmxOn => {
-                let (cf, zf) =
-                    vmx_on(&raw mut vmx_allocation_region.p_aligned_physical_buffer as _);
-                if cf != 0 || zf != 0 {
-                    println!("[-] __vmx_on failed with status: cf:{cf:#X}/zf:{zf:#X}");
+                if vmx_on(&raw mut vmx_allocation_region.p_aligned_physical_buffer as _).is_err()
+                {
                     return STATUS_UNSUCCESSFUL;
                 }
 
@@ -161,10 +159,7 @@ pub fn allocate_vmx_region(
                 guest_state.vmxon_region = vmx_allocation_region;
             }
             VmxRegionTypeForAllocation::Vmcs => {
-                let (cf, zf) =
-                    vmptrld(&raw mut vmx_allocation_region.p_aligned_physical_buffer as _);
-                if cf != 0 {
-                    println!("[-] __vmx_vmptrld failed with status: cf:{cf:#X}/zf:{zf:#X}");
+                if vmptrld(&raw mut vmx_allocation_region.p_aligned_physical_buffer as _).is_err() {
                     return STATUS_UNSUCCESSFUL;
                 }
 
