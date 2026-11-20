@@ -66,7 +66,7 @@ fn instruction_has_vmx_error(rflags: u64) -> Result<(), VmxError> {
     }
 
     if cf != 0 {
-        return Err(VmxError::VmFailInvalid)
+        return Err(VmxError::VmFailInvalid);
     } else if zf != 0 {
         return Err(VmxError::VmFailValid);
     }
@@ -127,8 +127,8 @@ pub unsafe fn vmptrst() -> Result<u64, VmxError> {
 
     unsafe {
         asm!(
-            "vmptrst ({0})", 
-            "pushfq", 
+            "vmptrst ({0})",
+            "pushfq",
            "pop {1}",
             in(reg) &value,
             out(reg) rflags

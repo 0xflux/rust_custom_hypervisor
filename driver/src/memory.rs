@@ -150,8 +150,7 @@ pub fn allocate_vmx_region(
 
         match phase {
             VmxRegionTypeForAllocation::VmxOn => {
-                if vmx_on(&raw mut vmx_allocation_region.p_aligned_physical_buffer as _).is_err()
-                {
+                if vmx_on(&raw mut vmx_allocation_region.p_aligned_physical_buffer as _).is_err() {
                     return STATUS_UNSUCCESSFUL;
                 }
 
