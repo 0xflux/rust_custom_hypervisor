@@ -20,11 +20,11 @@ const ALIGNMENT_PAGE_SIZE: usize = 4096;
 /// of the allocation in BYTES.
 #[derive(Default)]
 pub struct VmxAllocatedRegion {
-    pub p_raw_data: *mut c_void,
-    pub p_aligned_virtual_buffer: *mut c_void,
-    pub p_aligned_physical_buffer: u64,
+    p_raw_data: *mut c_void,
+    p_aligned_virtual_buffer: *mut c_void,
+    p_aligned_physical_buffer: u64,
     /// In BYTES
-    pub len: usize,
+    len: usize,
 }
 
 impl VmxAllocatedRegion {
@@ -95,10 +95,42 @@ pub fn physical_to_virtual_address(p_addr: PVOID) -> PVOID {
     unsafe { MmGetVirtualForPhysical(physical) }
 }
 
+/// VMX resources owned by a single logical processor.
+///
+/// Each logical processor participating in VMX operation requires its own
+/// VMXON region and VMCS region. The regions contain both their allocated
+/// virtual-memory mappings and the physical addresses required by VMX
+/// instructions.
 #[derive(Default)]
 pub struct VirtualMachineState {
-    pub vmxon_region: VmxAllocatedRegion,
-    pub vmcs_region: VmxAllocatedRegion,
+    /// Page-aligned VMXON region used to enter VMX operation.
+    ///
+    /// Its **physical address** is supplied to `VMXON`.
+    vmxon_region: VmxAllocatedRegion,
+    /// Page-aligned Virtual-Machine Control Structure (VMCS) region.
+    ///
+    /// Its **physical address** is supplied to instructions such as `VMCLEAR`
+    /// and `VMPTRLD`. Once loaded, its fields are accessed through `VMREAD`
+    /// and `VMWRITE`.
+    vmcs_region: VmxAllocatedRegion,
+}
+
+impl VirtualMachineState {
+    pub fn get_physical_address_vmxon_region(&self) -> u64 {
+        self.vmxon_region.p_aligned_physical_buffer
+    }
+
+    pub fn get_physical_address_vmcs_region(&self) -> u64 {
+        self.vmcs_region.p_aligned_physical_buffer
+    }
+
+    pub fn get_virtual_address_vmxon_region(&self) -> *mut c_void {
+        self.vmxon_region.p_aligned_virtual_buffer
+    }
+
+    pub fn get_virtual_address_vmcs_region(&self) -> *mut c_void {
+        self.vmcs_region.p_aligned_virtual_buffer
+    }
 }
 
 pub enum VmxRegionTypeForAllocation {

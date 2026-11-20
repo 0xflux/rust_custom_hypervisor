@@ -1,4 +1,4 @@
-use core::{arch::asm, ptr::null_mut, sync::atomic::Ordering::SeqCst};
+use core::{arch::asm, ffi::c_void, ptr::null_mut, sync::atomic::Ordering::SeqCst};
 
 use alloc::{boxed::Box, vec::Vec};
 use wdk::{paged_code, println};
@@ -58,12 +58,14 @@ pub fn start_vmx() -> NTSTATUS {
         allocate_vmx_region(vm_state, VmxRegionTypeForAllocation::Vmcs);
 
         println!(
-            "[i] VMCS Region is allocated at {:p}",
-            vm_state.vmcs_region.p_aligned_virtual_buffer
+            "[i] VMCS Region is allocated at (virtual) {:p}, (physical) {:p}",
+            vm_state.get_virtual_address_vmcs_region(),
+            vm_state.get_physical_address_vmcs_region() as *const c_void,
         );
         println!(
-            "[i] VMXON Region is allocated at {:p}",
-            vm_state.vmxon_region.p_aligned_virtual_buffer
+            "[i] VMXON Region is allocated at (virtual) {:p}, (physical) {:p}",
+            vm_state.get_virtual_address_vmxon_region(),
+            vm_state.get_physical_address_vmxon_region() as *const c_void,
         );
     }
 

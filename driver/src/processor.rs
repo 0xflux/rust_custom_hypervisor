@@ -1,7 +1,9 @@
-use core::{arch::asm, ffi::c_void};
+use core::{arch::asm, ffi::c_void, ptr::addr_of};
 
 use wdk::println;
-use wdk_sys::{BOOLEAN, FALSE};
+use wdk_sys::{BOOLEAN, FALSE, PHYSICAL_ADDRESS};
+
+use crate::memory::VirtualMachineState;
 
 pub const MSR_IA32_FEATURE_CONTROL: i32 = 0x03A;
 pub const MSR_IA32_VMX_BASIC: i32 = 0x480;
@@ -91,6 +93,8 @@ pub fn vmx_on(physical_addr: *mut *mut c_void) -> Result<(), VmxError> {
     unsafe {
         asm!(
             "vmxon [{0}]",
+            // `pushfq` pushes RFLAGS; `pop` stores the value in `rflags` (register)
+            // RFLAGS being the 64 bit extension of the status and control register
             "pushfq",
             "pop {1}",
             in(reg) physical_addr,
@@ -101,7 +105,11 @@ pub fn vmx_on(physical_addr: *mut *mut c_void) -> Result<(), VmxError> {
     instruction_has_vmx_error(rflags)
 }
 
-pub fn vmptrld(physical_address: *mut *mut c_void) -> Result<(), VmxError> {
+/// This instruction marks the current-VMCS pointer valid and loads it with the physical address in the instruction operand.
+/// The instruction fails if its operand is not properly aligned, sets unsupported physical-address bits, or is equal to the 
+/// VMXON pointer. In addition, this instruction fails if the 32 bits in memory referenced by the operand do not match the VMCS 
+/// revision identifier supported by the processor.
+pub fn vmptrld(physical_address: *const u64) -> Result<(), VmxError> {
     let rflags: u64;
 
     unsafe {
@@ -117,19 +125,27 @@ pub fn vmptrld(physical_address: *mut *mut c_void) -> Result<(), VmxError> {
     instruction_has_vmx_error(rflags)
 }
 
-/// Return current VMCS pointer.
+pub fn load_vmcs(guest_state: &VirtualMachineState) -> Result<(), VmxError> {
+    vmptrld(&guest_state.get_physical_address_vmcs_region())
+}
+
+
+/// Store Pointer to Virtual-Machine Control Structure
+/// 
+/// Stores the current-VMCS pointer into a specified memory address. The operand of this 
+/// instruction is always 64 bits and is always in memory.
 ///
 /// # Safety
-/// Needs CPL 0.
-pub unsafe fn vmptrst() -> Result<u64, VmxError> {
+/// Requires CPL 0
+pub fn vmptrst() -> Result<u64, VmxError> {
     let value: u64 = 0;
     let rflags: u64;
 
     unsafe {
         asm!(
-            "vmptrst ({0})",
+            "vmptrst [{0}]",
             "pushfq",
-           "pop {1}",
+            "pop {1}",
             in(reg) &value,
             out(reg) rflags
         )
@@ -137,6 +153,31 @@ pub unsafe fn vmptrst() -> Result<u64, VmxError> {
 
     instruction_has_vmx_error(rflags)?;
     Ok(value)
+}
+
+/// Clear VMCS.
+///
+/// Ensures that VMCS data maintained on the processor is copied to the VMCS region
+/// located at 4KB-aligned physical address `addr` and initializes some parts of it.
+///
+/// # Safety
+/// Requires CPL 0
+pub fn clear_vmcs_state(guest_state: &VirtualMachineState) -> Result<(), VmxError>
+{
+    let rflags: u64;
+
+    // Clear the state of the VMCS to inactive
+    unsafe {
+        asm!(
+            "vmclear [{0}]",
+            "pushfq",
+            "pop {1}",
+            in(reg) &guest_state.get_physical_address_vmcs_region(),
+            out(reg) rflags
+        )
+    };
+
+    instruction_has_vmx_error(rflags)
 }
 
 pub fn enable_vmx_operation() {
