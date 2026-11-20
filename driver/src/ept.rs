@@ -89,6 +89,7 @@ pub struct EptTables {
     pub p_ept_pd: *mut EptPde,
     pub p_ept_pt: *mut EptPte,
     pub p_guest_memory: *mut c_void,
+    pub guest_memory_num_pages: usize,
 }
 
 impl Drop for EptTables {
@@ -198,7 +199,7 @@ impl EptTables {
         // Setup PT by allocating two pages contiguously
         // We allocate two pages because we need 1 page for our RIP to start and 1 page for RSP
         //
-        let num_pages = 10;
+        let num_pages = 100;
         let guest_sz_bytes: u64 = (num_pages * PAGE_SIZE) as _;
         let p_guest_memory =
             unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, guest_sz_bytes, POOL_TAG) };
@@ -206,11 +207,13 @@ impl EptTables {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
         ept_ptrs.p_guest_memory = p_guest_memory;
+        ept_ptrs.guest_memory_num_pages = num_pages as usize;
         println!("[+] Guest memory allocated");
 
-        // Create 10 EPT mappings
+        // Create `num_pages` EPT mappings
         // When the guest accesses guest-physical page i, redirect that access to the host-physical page backing
         // GuestMemory[i], with read/write/execute permission
+        // Note: the blog series has this as 10, but then we fill it x100, which faults so.. my guess is 100..?
         for i in 0..num_pages {
             unsafe {
                 // Select EPT leaf entry i

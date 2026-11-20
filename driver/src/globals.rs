@@ -1,6 +1,6 @@
 use core::{
     ptr::null_mut,
-    sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, Ordering::SeqCst},
+    sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicU64, Ordering::SeqCst},
 };
 
 use alloc::{boxed::Box, vec::Vec};

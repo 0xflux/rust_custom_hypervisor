@@ -5,7 +5,7 @@ extern crate alloc;
 #[cfg(not(test))]
 extern crate wdk_panic;
 
-use core::{iter::once, ptr::null_mut};
+use core::{iter::once, ptr::null_mut, sync::atomic::Ordering::SeqCst};
 
 use alloc::vec::Vec;
 use shared::{
@@ -23,8 +23,8 @@ static GLOBAL_ALLOCATOR: WdkAllocator = WdkAllocator;
 use wdk_sys::{
     DEVICE_OBJECT, DO_BUFFERED_IO, DO_DEVICE_INITIALIZING, DRIVER_OBJECT, FILE_DEVICE_SECURE_OPEN,
     FILE_DEVICE_UNKNOWN, IO_NO_INCREMENT, IO_TYPE_DEVICE, IRP, IRP_MJ_CLOSE, IRP_MJ_CREATE,
-    IRP_MJ_DEVICE_CONTROL, IRP_MJ_READ, IRP_MJ_WRITE, NTSTATUS, PCUNICODE_STRING, PDEVICE_OBJECT,
-    PIO_STACK_LOCATION, PIRP, PUNICODE_STRING, STATUS_INVALID_DEVICE_REQUEST,
+    IRP_MJ_DEVICE_CONTROL, IRP_MJ_READ, IRP_MJ_WRITE, NTSTATUS, PAGE_SIZE, PCUNICODE_STRING,
+    PDEVICE_OBJECT, PIO_STACK_LOCATION, PIRP, PUNICODE_STRING, STATUS_INVALID_DEVICE_REQUEST,
     STATUS_INVALID_PARAMETER, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, UNICODE_STRING,
     ntddk::{
         IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice, IoDeleteSymbolicLink,
@@ -79,6 +79,32 @@ pub unsafe extern "system" fn driver_entry(
     println!("");
     println!("========================================================");
     println!("[+] VMX operation started successfully.");
+
+    {
+        let p_tables = GLOBALS.ept_tables.load(SeqCst);
+        if p_tables.is_null() {
+            println!("[-] Invalid state of EPT Tables.");
+            driver_exit(driver);
+            return status;
+        }
+
+        let p_guest_mem = unsafe { (*p_tables).p_guest_memory };
+        if p_guest_mem.is_null() {
+            println!("[-] Invalid state of Guest Memory.");
+            driver_exit(driver);
+            return status;
+        }
+
+        let num_pages = unsafe { (*p_tables).guest_memory_num_pages };
+        for i in 0..((num_pages * PAGE_SIZE as usize) - 1) {
+            let tmp_asm: u8 = 0xF4;
+            unsafe { core::ptr::write_volatile((p_guest_mem as *mut u8).offset(i as _), tmp_asm) };
+        }
+        println!(
+            "[+] Filled guest page tables with 0xF4. Addr 0: {:#X}",
+            unsafe { *(p_guest_mem as *mut u8) }
+        );
+    }
 
     status
 }
