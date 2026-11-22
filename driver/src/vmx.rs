@@ -1,17 +1,31 @@
 use core::{arch::asm, ffi::c_void, ptr::null_mut, sync::atomic::Ordering::SeqCst};
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, format, vec::Vec};
+use anyhow::{Result, ensure};
 use wdk::{paged_code, println};
 use wdk_sys::{
-    NTSTATUS, STATUS_NOT_SUPPORTED, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
-    ntddk::{KeQueryActiveProcessorCount, KeSetSystemAffinityThread},
+    _POOL_TYPE::NonPagedPool,
+    KAFFINITY, NTSTATUS, PAGE_SIZE, STATUS_NOT_SUPPORTED, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
+    ntddk::{
+        ExAllocatePool2, KeQueryActiveProcessorCount, KeSetSystemAffinityThread,
+        MmAllocateNonCachedMemory,
+    },
 };
 
 use crate::{
+    POOL_TAG_HYPERVISOR,
+    error::HypervisorError::{self, InvalidPtr},
     globals::GLOBALS,
-    memory::{VirtualMachineState, VmxRegionTypeForAllocation, allocate_vmx_region},
-    processor::{enable_vmx_operation, is_vmx_supported, print_cpu_id},
+    memory::{
+        AllocationType, VirtualMachineState, VmxRegionTypeForAllocation, allocate_vmx_region,
+        virtual_to_physical_address,
+    },
+    processor::{
+        clear_vmcs_state, enable_vmx_operation, is_vmx_supported, load_vmcs, print_cpu_id,
+    },
 };
+
+const VMM_STACK_SIZE: u64 = 0x8000;
 
 pub fn start_vmx() -> NTSTATUS {
     paged_code!();
@@ -114,4 +128,79 @@ pub fn stop_vmx() {
     }
 
     GLOBALS.vmx_enabled.store(false, SeqCst);
+}
+
+// TODO thread safety mut access for guest_state[i]?
+pub fn launch_vm(processor_id: u32, p_eptp: *const c_void) -> Result<()> {
+    println!("================================================");
+    println!("Launching VM!");
+
+    let affinity_mask: KAFFINITY = 2u64.pow(processor_id);
+    unsafe { KeSetSystemAffinityThread(affinity_mask) };
+
+    paged_code!();
+
+    //
+    // Allocate stack for the VM Exit handler
+    //
+    let vmm_stack_va =
+        unsafe { ExAllocatePool2(NonPagedPool as _, VMM_STACK_SIZE, POOL_TAG_HYPERVISOR) };
+    ensure!(
+        !vmm_stack_va.is_null(),
+        HypervisorError::AllocationFailed(Some("Failed to allocate vmm stack.".into()))
+    );
+
+    let state = GLOBALS.guest_state.load(SeqCst);
+    ensure!(
+        !state.is_null(),
+        HypervisorError::InvalidPtr(Some("Failed to get guest state".into()))
+    );
+
+    let entry = unsafe { &mut *state }
+        .get_mut(processor_id as usize)
+        .ok_or(HypervisorError::NotFound(format!(
+            "Index {processor_id} not found"
+        )))?;
+
+    // Memory is already zeroed, no need to repeat
+    entry.set_vmm_stack_address(vmm_stack_va as _, AllocationType::Pool);
+
+    //
+    // Allocate memory for the MSR bitmap
+    //
+
+    // Note, in case of BSODs in the future, this is likely not contiguous - the blog uses this fn so
+    // lets go with it, but we are getting its physical address which makes me think maybe this should
+    // be contiguous?
+    let p_bitmap = unsafe { MmAllocateNonCachedMemory(PAGE_SIZE as _) };
+    ensure!(
+        !p_bitmap.is_null(),
+        HypervisorError::AllocationFailed(Some("Failed to allocate msr bitmap.".into()))
+    );
+
+    // Zero init the memory. The rust wdk does not have RtlZeroMemory :'(
+    unsafe { core::ptr::write_bytes(p_bitmap, 0u8, PAGE_SIZE as _) };
+    entry.set_msr_bitmap(
+        p_bitmap as _,
+        AllocationType::NonCachedMemory(PAGE_SIZE as u64),
+    );
+
+    let physical_msr = virtual_to_physical_address(p_bitmap);
+    ensure!(
+        !physical_msr.is_null(),
+        InvalidPtr(Some("Failed to find physical address of msr bitmap".into()))
+    );
+
+    entry.set_msr_physical(physical_msr as _);
+
+    //
+    // Clear the VMCS state and load VMCS (set the current VMCS)
+    //
+    clear_vmcs_state(entry)?;
+    load_vmcs(entry)?;
+
+    println!("[i] Setting up VMCS.");
+    // TODO setup_vmcs();
+
+    Ok(())
 }

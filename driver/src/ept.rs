@@ -8,7 +8,7 @@ use wdk_sys::{
     ntddk::{ExAllocatePool2, ExFreePoolWithTag},
 };
 
-use crate::{POOL_TAG, globals::GLOBALS, memory::virtual_to_physical_address};
+use crate::{POOL_TAG_HYPERVISOR, globals::GLOBALS, memory::virtual_to_physical_address};
 
 bitfield! {
     #[derive(Clone, Copy, Default)]
@@ -96,42 +96,42 @@ impl Drop for EptTables {
     fn drop(&mut self) {
         if !self.p_eptp.is_null() {
             unsafe {
-                ExFreePoolWithTag(self.p_eptp as _, POOL_TAG);
+                ExFreePoolWithTag(self.p_eptp as _, POOL_TAG_HYPERVISOR);
             }
             self.p_eptp = null_mut();
         }
 
         if !self.p_ept_pml_4.is_null() {
             unsafe {
-                ExFreePoolWithTag(self.p_ept_pml_4 as _, POOL_TAG);
+                ExFreePoolWithTag(self.p_ept_pml_4 as _, POOL_TAG_HYPERVISOR);
             }
             self.p_ept_pml_4 = null_mut();
         }
 
         if !self.p_ept_pdpt.is_null() {
             unsafe {
-                ExFreePoolWithTag(self.p_ept_pdpt as _, POOL_TAG);
+                ExFreePoolWithTag(self.p_ept_pdpt as _, POOL_TAG_HYPERVISOR);
             }
             self.p_ept_pdpt = null_mut();
         }
 
         if !self.p_ept_pd.is_null() {
             unsafe {
-                ExFreePoolWithTag(self.p_ept_pd as _, POOL_TAG);
+                ExFreePoolWithTag(self.p_ept_pd as _, POOL_TAG_HYPERVISOR);
             }
             self.p_ept_pd = null_mut();
         }
 
         if !self.p_ept_pt.is_null() {
             unsafe {
-                ExFreePoolWithTag(self.p_ept_pt as _, POOL_TAG);
+                ExFreePoolWithTag(self.p_ept_pt as _, POOL_TAG_HYPERVISOR);
             }
             self.p_ept_pt = null_mut();
         }
 
         if !self.p_guest_memory.is_null() {
             unsafe {
-                ExFreePoolWithTag(self.p_guest_memory, POOL_TAG);
+                ExFreePoolWithTag(self.p_guest_memory, POOL_TAG_HYPERVISOR);
             }
             self.p_guest_memory = null_mut();
         }
@@ -155,39 +155,65 @@ impl EptTables {
         let mut ept_ptrs = EptTables::default();
 
         // 1 ------------
-        let p_eptp = unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_eptp = unsafe {
+            ExAllocatePool2(
+                POOL_FLAG_NON_PAGED as _,
+                PAGE_SIZE as _,
+                POOL_TAG_HYPERVISOR,
+            )
+        };
         if p_eptp.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
         ept_ptrs.p_eptp = p_eptp as _;
 
         // 2 --------------
-        let p_ept_pml_4 =
-            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_ept_pml_4 = unsafe {
+            ExAllocatePool2(
+                POOL_FLAG_NON_PAGED as _,
+                PAGE_SIZE as _,
+                POOL_TAG_HYPERVISOR,
+            )
+        };
         if p_ept_pml_4.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
         ept_ptrs.p_ept_pml_4 = p_ept_pml_4 as _;
 
         // 3 ----------------
-        let p_ept_pdpt =
-            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_ept_pdpt = unsafe {
+            ExAllocatePool2(
+                POOL_FLAG_NON_PAGED as _,
+                PAGE_SIZE as _,
+                POOL_TAG_HYPERVISOR,
+            )
+        };
         if p_ept_pdpt.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
         ept_ptrs.p_ept_pdpt = p_ept_pdpt as _;
 
         // 4 -----------------
-        let p_ept_pd =
-            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_ept_pd = unsafe {
+            ExAllocatePool2(
+                POOL_FLAG_NON_PAGED as _,
+                PAGE_SIZE as _,
+                POOL_TAG_HYPERVISOR,
+            )
+        };
         if p_ept_pd.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
         ept_ptrs.p_ept_pd = p_ept_pd as _;
 
         // 5 -----------------
-        let p_ept_pt =
-            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, PAGE_SIZE as _, POOL_TAG) };
+        let p_ept_pt = unsafe {
+            ExAllocatePool2(
+                POOL_FLAG_NON_PAGED as _,
+                PAGE_SIZE as _,
+                POOL_TAG_HYPERVISOR,
+            )
+        };
         if p_ept_pt.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }
@@ -201,8 +227,13 @@ impl EptTables {
         //
         let num_pages = 100;
         let guest_sz_bytes: u64 = (num_pages * PAGE_SIZE) as _;
-        let p_guest_memory =
-            unsafe { ExAllocatePool2(POOL_FLAG_NON_PAGED as _, guest_sz_bytes, POOL_TAG) };
+        let p_guest_memory = unsafe {
+            ExAllocatePool2(
+                POOL_FLAG_NON_PAGED as _,
+                guest_sz_bytes,
+                POOL_TAG_HYPERVISOR,
+            )
+        };
         if p_guest_memory.is_null() {
             return STATUS_INSUFFICIENT_RESOURCES;
         }

@@ -1,23 +1,30 @@
-use core::{ffi::c_void, ptr::null_mut};
+use core::{
+    ffi::c_void,
+    ptr::{null, null_mut},
+};
 
 use wdk::println;
 use wdk_sys::{
-    DISPATCH_LEVEL, KIRQL, NTSTATUS, PHYSICAL_ADDRESS, PVOID, SIZE_T,
-    STATUS_INSUFFICIENT_RESOURCES, STATUS_INVALID_LEVEL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
-    ULONG,
+    DISPATCH_LEVEL, NTSTATUS, PHYSICAL_ADDRESS, PVOID, SIZE_T, STATUS_INSUFFICIENT_RESOURCES,
+    STATUS_INVALID_LEVEL, STATUS_SUCCESS, STATUS_UNSUCCESSFUL, ULONG,
     ntddk::{
-        KeGetCurrentIrql, MmAllocateContiguousMemory, MmFreeContiguousMemory, MmGetPhysicalAddress,
-        MmGetVirtualForPhysical,
+        ExFreePool, KeGetCurrentIrql, MmAllocateContiguousMemory, MmFreeContiguousMemory,
+        MmFreeNonCachedMemory, MmGetPhysicalAddress, MmGetVirtualForPhysical,
     },
 };
 
-use crate::processor::{Ia32VmxBasicMsr, MSR_IA32_VMX_BASIC, rdmsr, vmptrld, vmx_on};
+use crate::{
+    memory::AllocationType::Freed,
+    processor::{Ia32VmxBasicMsr, MSR_IA32_VMX_BASIC, rdmsr, vmptrld, vmx_on},
+};
 
 const VMX_ON_SIZE: usize = 4096;
 const ALIGNMENT_PAGE_SIZE: usize = 4096;
 
 /// Safe RAII wrapper around the raw API, storing a pointer to the `T` and the length
 /// of the allocation in BYTES.
+///
+/// This must be memory allocated that can be freed with `MmFreeContiguousMemory`.
 #[derive(Default)]
 pub struct VmxAllocatedRegion {
     p_raw_data: *mut c_void,
@@ -114,17 +121,85 @@ pub struct VirtualMachineState {
     /// and `VMWRITE`.
     vmcs_region: VmxAllocatedRegion,
     /// Extended-Page-Table Pointer
+    // TODO do I actually free this o.0
     eptp: *const u64,
     /// Stack for VMM in VM-Exit State
-    vmm_stack: *const u64,
-    // TODO these can be setup like the VmxAllocatedRegion
+    vmm_stack: ManagedPtr,
     /// MSR Bitmap Virtual Address
-    msr_bitmap: *const u64,
+    msr_bitmap: ManagedPtr,
     /// MSR Bitmap Virtual Address
     msr_bitmap_physical: *const u64,
 }
 
+#[derive(Debug, Default)]
+pub enum AllocationType {
+    #[default]
+    Pool,
+    /// Memory allocated that is cached memory must also define the size in bytes of
+    /// the allocated region.
+    NonCachedMemory(u64),
+    /// Memory which has been freed must be marked as freed
+    Freed,
+}
+
+#[derive(Default, Debug)]
+struct ManagedPtr {
+    address: *mut u64,
+    allocation_type: AllocationType,
+}
+
+impl Drop for ManagedPtr {
+    fn drop(&mut self) {
+        if self.address.is_null() {
+            return;
+        }
+
+        match self.allocation_type {
+            AllocationType::Pool => unsafe {
+                ExFreePool(self.address as _);
+            },
+            AllocationType::NonCachedMemory(sz) => unsafe {
+                MmFreeNonCachedMemory(self.address as _, sz);
+            },
+            Freed => return,
+        }
+
+        self.allocation_type = Freed;
+        self.address = null_mut();
+    }
+}
+
 impl VirtualMachineState {
+    pub fn set_vmm_stack_address(&mut self, addr: *mut u64, allocation_type: AllocationType) {
+        self.vmm_stack.address = addr;
+        self.vmm_stack.allocation_type = allocation_type;
+    }
+
+    pub fn get_vmm_stack_address(&self) -> Option<*mut u64> {
+        if !self.vmm_stack.address.is_null() {
+            Some(self.vmm_stack.address)
+        } else {
+            None
+        }
+    }
+
+    pub fn set_msr_bitmap(&mut self, addr: *mut u64, allocation_type: AllocationType) {
+        self.msr_bitmap.address = addr;
+        self.msr_bitmap.allocation_type = allocation_type;
+    }
+
+    pub fn get_msr_bitmap(&self) -> Option<*mut u64> {
+        if !self.msr_bitmap.address.is_null() {
+            Some(self.msr_bitmap.address)
+        } else {
+            None
+        }
+    }
+
+    pub fn set_msr_physical(&mut self, addr: *mut u64) {
+        self.msr_bitmap_physical = addr
+    }
+
     pub fn get_physical_address_vmxon_region(&self) -> u64 {
         self.vmxon_region.p_aligned_physical_buffer
     }

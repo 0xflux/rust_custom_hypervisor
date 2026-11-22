@@ -1,9 +1,16 @@
-use core::{arch::asm, ffi::c_void, ptr::addr_of};
+use core::{arch::asm, ffi::c_void};
 
 use wdk::println;
-use wdk_sys::{BOOLEAN, FALSE, PHYSICAL_ADDRESS};
+use wdk_sys::{BOOLEAN, FALSE};
 
-use crate::memory::VirtualMachineState;
+use crate::{
+    error::{
+        HypervisorError,
+        VmxError::{VmFailInvalid, VmFailValid},
+    },
+    memory::VirtualMachineState,
+};
+use anyhow::{Result, bail};
 
 pub const MSR_IA32_FEATURE_CONTROL: i32 = 0x03A;
 pub const MSR_IA32_VMX_BASIC: i32 = 0x480;
@@ -55,22 +62,17 @@ impl Ia32VmxBasicMsr {
     }
 }
 
-pub enum VmxError {
-    VmFailInvalid,
-    VmFailValid,
-}
-
 #[inline(always)]
-fn instruction_has_vmx_error(rflags: u64) -> Result<(), VmxError> {
+fn instruction_has_vmx_error(rflags: u64) -> Result<()> {
     let (cf, zf) = (rflags as u8 & 1u8, ((rflags >> 6) & 1) as u8);
     if cf != 0 || zf != 0 {
         println!("[-] __vmx_on failed with status: cf:{cf:#X}/zf:{zf:#X}");
     }
 
     if cf != 0 {
-        return Err(VmxError::VmFailInvalid);
+        bail!(HypervisorError::VmxError(VmFailInvalid));
     } else if zf != 0 {
-        return Err(VmxError::VmFailValid);
+        bail!(HypervisorError::VmxError(VmFailValid));
     }
 
     Ok(())
@@ -87,7 +89,7 @@ fn instruction_has_vmx_error(rflags: u64) -> Result<(), VmxError> {
 /// | 0 | The operation succeeded. |
 /// | 1 | The operation failed with extended status available in the VM-instruction error field of the current VMCS. |
 /// | 2 | The operation failed without status available. |
-pub fn vmx_on(physical_addr: *mut *mut c_void) -> Result<(), VmxError> {
+pub fn vmx_on(physical_addr: *mut *mut c_void) -> Result<()> {
     let rflags: u64;
 
     unsafe {
@@ -109,7 +111,7 @@ pub fn vmx_on(physical_addr: *mut *mut c_void) -> Result<(), VmxError> {
 /// The instruction fails if its operand is not properly aligned, sets unsupported physical-address bits, or is equal to the
 /// VMXON pointer. In addition, this instruction fails if the 32 bits in memory referenced by the operand do not match the VMCS
 /// revision identifier supported by the processor.
-pub fn vmptrld(physical_address: *const u64) -> Result<(), VmxError> {
+pub fn vmptrld(physical_address: *const u64) -> Result<()> {
     let rflags: u64;
 
     unsafe {
@@ -125,7 +127,7 @@ pub fn vmptrld(physical_address: *const u64) -> Result<(), VmxError> {
     instruction_has_vmx_error(rflags)
 }
 
-pub fn load_vmcs(guest_state: &VirtualMachineState) -> Result<(), VmxError> {
+pub fn load_vmcs(guest_state: &VirtualMachineState) -> Result<()> {
     vmptrld(&guest_state.get_physical_address_vmcs_region())
 }
 
@@ -136,7 +138,7 @@ pub fn load_vmcs(guest_state: &VirtualMachineState) -> Result<(), VmxError> {
 ///
 /// # Safety
 /// Requires CPL 0
-pub fn vmptrst() -> Result<u64, VmxError> {
+pub fn vmptrst() -> Result<u64> {
     let value: u64 = 0;
     let rflags: u64;
 
@@ -161,7 +163,7 @@ pub fn vmptrst() -> Result<u64, VmxError> {
 ///
 /// # Safety
 /// Requires CPL 0
-pub fn clear_vmcs_state(guest_state: &VirtualMachineState) -> Result<(), VmxError> {
+pub fn clear_vmcs_state(guest_state: &VirtualMachineState) -> Result<()> {
     let rflags: u64;
 
     // Clear the state of the VMCS to inactive

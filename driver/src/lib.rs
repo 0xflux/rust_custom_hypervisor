@@ -39,12 +39,13 @@ use crate::{
 };
 
 mod ept;
+mod error;
 mod globals;
 mod memory;
 mod processor;
 mod vmx;
 
-pub const POOL_TAG: u32 = u32::from_le_bytes(*b"rsvh");
+pub const POOL_TAG_HYPERVISOR: u32 = u32::from_le_bytes(*b"rsvh");
 
 #[unsafe(export_name = "DriverEntry")]
 pub unsafe extern "system" fn driver_entry(
