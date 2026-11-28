@@ -10,6 +10,8 @@ pub enum HypervisorError {
     InvalidPtr(Option<String>),
     #[error("Not found: {0}")]
     NotFound(String),
+    #[error("vmlaunch failed")]
+    VmLaunchFailed,
 }
 
 #[derive(Debug, thiserror::Error)]

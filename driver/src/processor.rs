@@ -66,7 +66,7 @@ impl Ia32VmxBasicMsr {
 fn instruction_has_vmx_error(rflags: u64) -> Result<()> {
     let (cf, zf) = (rflags as u8 & 1u8, ((rflags >> 6) & 1) as u8);
     if cf != 0 || zf != 0 {
-        println!("[-] __vmx_on failed with status: cf:{cf:#X}/zf:{zf:#X}");
+        println!("[-] VMX function failed with status: cf:{cf:#X}/zf:{zf:#X}");
     }
 
     if cf != 0 {
@@ -105,6 +105,13 @@ pub fn vmx_on(physical_addr: *mut *mut c_void) -> Result<()> {
     };
 
     instruction_has_vmx_error(rflags)
+}
+
+#[inline(always)]
+pub fn vm_launch() {
+    unsafe {
+        asm!("VMLAUNCH",);
+    }
 }
 
 /// This instruction marks the current-VMCS pointer valid and loads it with the physical address in the instruction operand.
